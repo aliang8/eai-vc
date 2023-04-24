@@ -20,9 +20,16 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from vc_models.utils.wandb import setup_wandb
 import mj_envs, gym, mjrl.envs, dmc2gym
-import numpy as np, time as timer, multiprocessing, pickle, os, torch, gc
+import numpy as np, time as timer, pickle, os, torch, gc
 import torch.nn as nn
 import torchvision.transforms as T
+
+# import multiprocessing_on_dill as multiprocessing
+
+import pickle
+import cloudpickle
+
+pickle.Pickler = cloudpickle.Pickler
 
 
 def set_seed(seed=None):
@@ -207,43 +214,43 @@ def bc_pvr_train_loop(config: dict) -> None:
             epoch_log["eval/highest_success"] = highest_success
             epoch_log["eval/highest_score"] = highest_score
 
-            # log statistics on training paths
-            if len(init_states) > 0:
-                paths = rollout_from_init_states(
-                    init_states[: config["eval_num_traj"]],
-                    e,
-                    policy,
-                    eval_mode=True,
-                    horizon=e.horizon,
-                )
-            else:
-                # use same seed as used for collecting the training paths
-                paths = sample_paths(
-                    num_traj=config["eval_num_traj"],
-                    env=e,
-                    policy=policy,
-                    eval_mode=True,
-                    horizon=e.horizon,
-                    base_seed=54321,
-                    num_cpu=config["num_cpu"],
-                )
-            (
-                tr_score,
-                tr_success,
-                highest_tr_score,
-                highest_tr_success,
-            ) = compute_metrics_from_paths(
-                env=e,
-                suite=config["env_kwargs"]["suite"],
-                paths=paths,
-                highest_score=highest_tr_score,
-                highest_success=highest_tr_success,
-            )
-            epoch_log["train/epoch"] = epoch
-            epoch_log["train/score"] = tr_score
-            epoch_log["train/success"] = tr_success
-            epoch_log["train/highest_score"] = highest_tr_score
-            epoch_log["train/highest_success"] = highest_tr_success
+            # # log statistics on training paths
+            # if len(init_states) > 0:
+            #     paths = rollout_from_init_states(
+            #         init_states[: config["eval_num_traj"]],
+            #         e,
+            #         policy,
+            #         eval_mode=True,
+            #         horizon=e.horizon,
+            #     )
+            # else:
+            #     # use same seed as used for collecting the training paths
+            #     paths = sample_paths(
+            #         num_traj=config["eval_num_traj"],
+            #         env=e,
+            #         policy=policy,
+            #         eval_mode=True,
+            #         horizon=e.horizon,
+            #         base_seed=54321,
+            #         num_cpu=config["num_cpu"],
+            #     )
+            # (
+            #     tr_score,
+            #     tr_success,
+            #     highest_tr_score,
+            #     highest_tr_success,
+            # ) = compute_metrics_from_paths(
+            #     env=e,
+            #     suite=config["env_kwargs"]["suite"],
+            #     paths=paths,
+            #     highest_score=highest_tr_score,
+            #     highest_success=highest_tr_success,
+            # )
+            # epoch_log["train/epoch"] = epoch
+            # epoch_log["train/score"] = tr_score
+            # epoch_log["train/success"] = tr_success
+            # epoch_log["train/highest_score"] = highest_tr_score
+            # epoch_log["train/highest_success"] = highest_tr_success
 
             # Log with wandb
             wandb_run.log(data=epoch_log)
@@ -337,10 +344,12 @@ def compute_embeddings(
         embedding_name=embedding_name
     )
     model.to(device)
+
     for path in tqdm(paths):
         inp = path["images"]  # shape (B, H, W, 3)
         path["embeddings"] = np.zeros((inp.shape[0], embedding_dim))
         path_len = inp.shape[0]
+
         preprocessed_inp = torch.cat(
             [transforms(frame) for frame in inp]
         )  # shape (B, 3, H, W)
